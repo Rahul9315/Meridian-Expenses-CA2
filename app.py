@@ -21,10 +21,19 @@ app = Flask(__name__)
 app.secret_key = "meridian-dev-key"          # fixed across every deployment
 DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "expenses.db")
 
-
+"""
 def db():
     if "db" not in g:
         g.db = sqlite3.connect(DB)
+        g.db.row_factory = sqlite3.Row
+    return g.db
+
+"""
+
+def db():
+    if "db" not in g:
+        database_path = app.config.get("DATABASE", DB)
+        g.db = sqlite3.connect(database_path)
         g.db.row_factory = sqlite3.Row
     return g.db
 
