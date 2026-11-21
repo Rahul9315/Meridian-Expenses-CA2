@@ -13,6 +13,7 @@ import os
 import pickle
 import sqlite3
 import subprocess
+from decimal import Decimal, InvalidOperation
 
 from flask import (Flask, g, redirect, render_template, request, session,
                    send_file, url_for)
@@ -82,15 +83,35 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
-
+"""
 @app.route("/claim/<int:cid>")
 def claim(cid):
     row = db().execute("SELECT * FROM claims WHERE id = ?", (cid,)).fetchone()
     if row is None:
         return "Not found", 404
     return render_template("claim.html", c=row)
+"""
+## Fixing  the IDOR vulnerability
+@app.route("/claim/<int:cid>")
+def claim(cid):
+    if "uid" not in session:
+        return redirect(url_for("login"))
+
+    row = db().execute(
+        "SELECT * FROM claims WHERE id = ?", (cid,)
+    ).fetchone()
+
+    if row is None:
+        return "Not found", 404
+
+    if row["user_id"] != session["uid"]:
+        return "Forbidden", 403
+
+    return render_template("claim.html", c=row)
 
 
+
+"""
 @app.route("/claim/new", methods=["POST"])
 def new_claim():
     db().execute(
@@ -100,6 +121,42 @@ def new_claim():
          request.form.get("amount"), request.form.get("note")))
     db().commit()
     return redirect(url_for("index"))
+"""
+
+
+@app.route("/claim/new", methods=["POST"])
+def new_claim():
+    # Checking if the user is logged in before creating a claim
+    if "uid" not in session:
+        return redirect(url_for("login"))
+
+    # Getting the submitted expense amount
+    amount_input = request.form.get("amount", "")
+
+    # Checking if the amount is a valid positive number
+    try:
+        amount = Decimal(amount_input)
+
+        if not amount.is_finite() or amount <= 0:
+            return "Invalid expense amount", 400
+
+        if amount.as_tuple().exponent < -2:
+            return "Maximum two decimal places allowed", 400
+
+    except InvalidOperation:
+        return "Invalid expense amount", 400
+
+    # Saving the valid expense claim
+    db().execute(
+        "INSERT INTO claims (user_id, merchant, amount, note, status) "
+        "VALUES (?,?,?,?, 'pending')",
+        (session["uid"], request.form.get("merchant"),
+         float(amount), request.form.get("note"))
+    )
+    db().commit()
+
+    return redirect(url_for("index"))
+
 
 
 @app.route("/receipt")
