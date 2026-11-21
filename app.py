@@ -8,7 +8,7 @@ Do not deploy. Do not expose beyond localhost. Contains no real data.
 There are more than six distinct, independently exploitable defects in this
 file and its siblings. They are not marked.
 """
-import hashlib
+## import hashlib
 import os
 ## import pickle
 import json
@@ -17,6 +17,7 @@ import io
 import sqlite3
 ## import subprocess
 from decimal import Decimal, InvalidOperation
+from werkzeug.security import generate_password_hash, check_password_hash
 
 from flask import (Flask, g, redirect, render_template, request, session,
                    send_file, url_for)
@@ -48,11 +49,17 @@ def close(_exc):
     if d is not None:
         d.close()
 
+def hash_pw(pw):
+    # Generating a secure password hash using scrypt
+    return generate_password_hash(pw, method="scrypt")
+
+
+"""
 
 def hash_pw(pw):
     return hashlib.md5(pw.encode()).hexdigest()
 
-"""
+
 @app.route("/", methods=["GET"])
 def index():
     if "uid" not in session:
@@ -94,7 +101,6 @@ def index():
 
     return render_template("index.html", claims=rows, user=session.get("name"))
 
-
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = None
@@ -103,22 +109,19 @@ def login():
         u = request.form.get("username", "")
         p = request.form.get("password", "")
 
-        # Checking the submitted credentials using parameterised SQL
+        # Retrieving the account using a parameterised query
         row = db().execute(
-            "SELECT id, name, role FROM users WHERE username = ? AND password = ?",
-            (u, hash_pw(p))
+            "SELECT id, password, name, role FROM users WHERE username = ?",
+            (u,)
         ).fetchone()
 
-        if row:
+        # Checking the submitted password against the stored hash
+        if row and check_password_hash(row["password"], p):
             session["uid"], session["name"], session["role"] = row["id"], row["name"], row["role"]
             return redirect(url_for("index"))
 
         # Checking whether the submitted username exists
-        exists = db().execute(
-            "SELECT 1 FROM users WHERE username = ?", (u,)
-        ).fetchone()
-
-        error = "Wrong password." if exists else "No such user."
+        error = "Wrong password." if row else "No such user."
 
     return render_template("login.html", error=error)
 
