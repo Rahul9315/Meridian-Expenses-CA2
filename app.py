@@ -14,6 +14,8 @@ import os
 import json
 import csv
 import io
+from pathlib import Path
+import secrets
 import sqlite3
 ## import subprocess
 from decimal import Decimal, InvalidOperation
@@ -23,7 +25,12 @@ from flask import (Flask, g, redirect, render_template, request, session,
                    send_file, url_for)
 
 app = Flask(__name__)
-app.secret_key = "meridian-dev-key"          # fixed across every deployment
+
+# Loading the Flask secret from the environment
+app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
+
+## app = Flask(__name__)
+## app.secret_key = "meridian-dev-key"          # fixed across every deployment
 DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "expenses.db")
 
 """
@@ -207,13 +214,39 @@ def new_claim():
     return redirect(url_for("index"))
 
 
+@app.route("/receipt")
+def receipt():
+    # Checking whether the user is logged in
+    if "uid" not in session:
+        return redirect(url_for("login"))
 
+    # Resolving the permitted receipts directory
+    receipts_dir = Path(app.root_path) / "receipts"
+    receipts_dir = receipts_dir.resolve()
+
+    # Resolving the requested receipt filename
+    requested_file = (receipts_dir / request.args.get("f", "")).resolve()
+
+    # Checking whether the requested file remains inside the receipts directory
+    if not requested_file.is_relative_to(receipts_dir):
+        return "Forbidden", 403
+
+    # Checking whether the requested path identifies an existing file
+    if not requested_file.is_file():
+        return "Receipt not found", 404
+
+    # Sending the permitted receipt file
+    return send_file(requested_file)
+
+
+
+"""
 @app.route("/receipt")
 def receipt():
     name = request.args.get("f", "")
     return send_file(os.path.join("receipts", name))
 
-"""
+
 @app.route("/export")
 def export():
     month = request.args.get("month", "2026-09")
@@ -311,4 +344,4 @@ def debug_config():
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    app.run(host="127.0.0.1", port=5000, debug=False)
