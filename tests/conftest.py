@@ -36,12 +36,13 @@ def client(tmp_path):
             status TEXT
         );
 
-        INSERT INTO users
+       INSERT INTO users
             (id, username, password, name, role)
         VALUES
             (1, 'jdoe', 'testhash1', 'Jane Doe', 'staff'),
             (2, 'rsmith', 'testhash2', 'Rob Smith', 'staff'),
-            (3, 'achen', 'testhash3', 'Alice Chen', 'finance');
+            (3, 'achen', 'testhash3', 'Alice Chen', 'finance'),
+            (4, 'admin', 'testhash4', 'System Admin', 'admin');
 
         INSERT INTO claims
             (id, user_id, merchant, amount, note, status)

@@ -333,6 +333,25 @@ def prefs():
 
 @app.route("/admin/users")
 def admin_users():
+    # Checking whether the user is logged in
+    if "uid" not in session:
+        return redirect(url_for("login"))
+
+    # Checking whether the logged-in user has administrator privileges
+    if session.get("role") != "admin":
+        return "Forbidden", 403
+
+    # Retrieving user records for the administrator
+    rows = db().execute(
+        "SELECT id, username, name, role FROM users"
+    ).fetchall()
+
+    return render_template("admin.html", users=rows)
+
+
+"""
+@app.route("/admin/users")
+def admin_users():
     rows = db().execute("SELECT id, username, name, role FROM users").fetchall()
     return render_template("admin.html", users=rows)
 
@@ -342,6 +361,7 @@ def debug_config():
     return {"secret_key": app.secret_key, "db": DB,
             "env": {k: v for k, v in os.environ.items() if "CCT" in k or "FLASK" in k}}
 
+"""
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=False)
