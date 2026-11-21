@@ -10,9 +10,12 @@ file and its siblings. They are not marked.
 """
 import hashlib
 import os
-import pickle
+## import pickle
+import json
+import csv
+import io
 import sqlite3
-import subprocess
+## import subprocess
 from decimal import Decimal, InvalidOperation
 
 from flask import (Flask, g, redirect, render_template, request, session,
@@ -49,7 +52,7 @@ def close(_exc):
 def hash_pw(pw):
     return hashlib.md5(pw.encode()).hexdigest()
 
-
+"""
 @app.route("/", methods=["GET"])
 def index():
     if "uid" not in session:
@@ -76,6 +79,49 @@ def login():
             "SELECT 1 FROM users WHERE username = ?", (u,)).fetchone()
         error = "Wrong password." if exists else "No such user."
     return render_template("login.html", error=error)
+"""
+
+@app.route("/", methods=["GET"])
+def index():
+    if "uid" not in session:
+        return redirect(url_for("login"))
+
+    # Retrieving claims belonging to the logged-in user
+    rows = db().execute(
+        "SELECT * FROM claims WHERE user_id = ? ORDER BY id DESC",
+        (session["uid"],)
+    ).fetchall()
+
+    return render_template("index.html", claims=rows, user=session.get("name"))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+
+    if request.method == "POST":
+        u = request.form.get("username", "")
+        p = request.form.get("password", "")
+
+        # Checking the submitted credentials using parameterised SQL
+        row = db().execute(
+            "SELECT id, name, role FROM users WHERE username = ? AND password = ?",
+            (u, hash_pw(p))
+        ).fetchone()
+
+        if row:
+            session["uid"], session["name"], session["role"] = row["id"], row["name"], row["role"]
+            return redirect(url_for("index"))
+
+        # Checking whether the submitted username exists
+        exists = db().execute(
+            "SELECT 1 FROM users WHERE username = ?", (u,)
+        ).fetchone()
+
+        error = "Wrong password." if exists else "No such user."
+
+    return render_template("login.html", error=error)
+
 
 
 @app.route("/logout")
@@ -164,7 +210,7 @@ def receipt():
     name = request.args.get("f", "")
     return send_file(os.path.join("receipts", name))
 
-
+"""
 @app.route("/export")
 def export():
     month = request.args.get("month", "2026-09")
@@ -173,12 +219,78 @@ def export():
         "sqlite3 %s '.mode csv' '.once %s' 'SELECT * FROM claims'" % (DB, out),
         shell=True)
     return send_file(out, as_attachment=True)
+"""
 
+@app.route("/export")
+def export():
+    # Checking if the user is logged in
+    if "uid" not in session:
+        return redirect(url_for("login"))
 
+    # Checking if the user has permission to export all claims
+    if session.get("role") not in ("finance", "admin"):
+        return "Forbidden", 403
+
+    # Creating an in-memory CSV file
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Retrieving claim records from the database
+    rows = db().execute(
+        "SELECT * FROM claims ORDER BY id"
+    ).fetchall()
+
+    # Writing the CSV column headings
+    writer.writerow(["id", "user_id", "merchant", "amount", "note", "status"])
+
+    # Writing the claim records
+    for row in rows:
+        writer.writerow([
+            row["id"],
+            row["user_id"],
+            row["merchant"],
+            row["amount"],
+            row["note"],
+            row["status"]
+        ])
+
+    # Preparing the CSV file for download
+    output.seek(0)
+    return send_file(
+        io.BytesIO(output.getvalue().encode("utf-8")),
+        mimetype="text/csv",
+        as_attachment=True,
+        download_name="expenses.csv"
+    )
+"""
 @app.route("/prefs", methods=["POST"])
 def prefs():
     blob = request.form.get("prefs", "")
     data = pickle.loads(bytes.fromhex(blob))
+    session["prefs"] = data
+    return redirect(url_for("index"))
+
+"""
+@app.route("/prefs", methods=["POST"])
+def prefs():
+    # Checking if the user is logged in
+    if "uid" not in session:
+        return redirect(url_for("login"))
+
+    # Reading the submitted preferences
+    blob = request.form.get("prefs", "")
+
+    # Checking whether the submitted preferences contain valid JSON
+    try:
+        data = json.loads(blob)
+    except (json.JSONDecodeError, TypeError):
+        return "Invalid preferences", 400
+
+    # Checking that preferences are stored as a dictionary
+    if not isinstance(data, dict):
+        return "Invalid preferences", 400
+
+    # Saving the validated preferences in the session
     session["prefs"] = data
     return redirect(url_for("index"))
 
