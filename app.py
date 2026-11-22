@@ -12,6 +12,7 @@ file and its siblings. They are not marked.
 import os
 ## import pickle
 import json
+import re
 import csv
 import io
 from pathlib import Path
@@ -221,21 +222,42 @@ def receipt():
         return redirect(url_for("login"))
 
     # Resolving the permitted receipts directory
-    receipts_dir = Path(app.root_path) / "receipts"
-    receipts_dir = receipts_dir.resolve()
+    receipts_dir = (Path(app.root_path) / "receipts").resolve()
 
     # Resolving the requested receipt filename
     requested_file = (receipts_dir / request.args.get("f", "")).resolve()
 
-    # Checking whether the requested file remains inside the receipts directory
+    # Checking whether the requested path remains inside the receipts directory
     if not requested_file.is_relative_to(receipts_dir):
         return "Forbidden", 403
 
-    # Checking whether the requested path identifies an existing file
+    # Checking whether the filename follows the expected claim receipt format
+    match = re.fullmatch(r"claim-(\d+)\.txt", requested_file.name)
+    if not match:
+        return "Invalid receipt filename", 400
+
+    # Retrieving the associated claim
+    claim_id = int(match.group(1))
+    claim = db().execute(
+        "SELECT id, user_id FROM claims WHERE id = ?",
+        (claim_id,)
+    ).fetchone()
+
+    if claim is None:
+        return "Receipt not found", 404
+
+    # Checking whether the user owns the claim or has finance privileges
+    if (
+        claim["user_id"] != session["uid"]
+        and session.get("role") not in ("finance", "admin")
+    ):
+        return "Forbidden", 403
+
+    # Checking whether the requested receipt file exists
     if not requested_file.is_file():
         return "Receipt not found", 404
 
-    # Sending the permitted receipt file
+    # Sending the authorised receipt file
     return send_file(requested_file)
 
 
