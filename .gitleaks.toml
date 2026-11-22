@@ -1,0 +1,10 @@
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "ca2-demo-token"
+description = "Detecting a harmless CA2 demonstration token"
+regex = '''CA2_DEMO_TOKEN_[A-Z0-9]{20}'''
+secretGroup = 0
+keywords = ["CA2_DEMO_TOKEN_"]
