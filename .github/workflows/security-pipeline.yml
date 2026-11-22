@@ -37,8 +37,9 @@ jobs:
       - name: Run automated application tests
         env:
           FLASK_SECRET_KEY: ${{ secrets.FLASK_SECRET_KEY }}
+          PYTHONPATH: .
         run: |
-          pytest -v
+          python -m pytest -v
 
       - name: Run Bandit SAST scan
         run: |
