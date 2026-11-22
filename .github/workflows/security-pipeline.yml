@@ -53,6 +53,14 @@ jobs:
         run: |
           pip-audit -r requirements.txt
 
+      - name: Fetch complete Git history
+        run: |
+          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --unshallow origin
+          fi
+          git log -1 --oneline
+
       - name: Run Gitleaks secret detection
         uses: gitleaks/gitleaks-action@v3
         env:
