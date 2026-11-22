@@ -43,7 +43,7 @@ jobs:
 
       - name: Run Bandit SAST scan
         run: |
-          bandit -r app.py seed.py -ll
+          bandit -r app.py seed.py security_test_vulnerability.py -ll
 
       - name: Run Semgrep SAST scan
         run: |
